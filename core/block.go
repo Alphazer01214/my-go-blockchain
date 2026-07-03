@@ -1,16 +1,17 @@
 package core
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"io"
 	"my-go-blockchain/types"
-	"time"
 )
 
 type Header struct {
 	Version   uint32
 	PrevHash  types.Hash
-	Timestamp time.Time
+	Timestamp int64
 	Height    uint32
 	Nonce     uint64
 }
@@ -58,6 +59,8 @@ func (h *Header) DecodeBinary(r io.Reader) error {
 type Block struct {
 	Header
 	Transactions []Transaction
+
+	hash types.Hash
 }
 
 func NewBlock(header *Header, transactions []Transaction) *Block {
@@ -65,4 +68,41 @@ func NewBlock(header *Header, transactions []Transaction) *Block {
 		Header:       *header,
 		Transactions: transactions,
 	}
+}
+
+func (b *Block) Hash() types.Hash {
+	if b.hash.IsEmpty() {
+		buffer := &bytes.Buffer{}
+		if err := b.Header.EncodeBinary(buffer); err != nil {
+			return types.Hash{}
+		}
+		b.hash = sha256.Sum256(buffer.Bytes())
+	}
+	return b.hash
+}
+
+func (b *Block) EncodeBinary(w io.Writer) error {
+	if err := b.Header.EncodeBinary(w); err != nil {
+		return err
+	}
+
+	for _, tx := range b.Transactions {
+		if err := tx.EncodeBinary(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *Block) DecodeBinary(r io.Reader) error {
+	if err := b.Header.DecodeBinary(r); err != nil {
+		return err
+	}
+
+	for _, tx := range b.Transactions {
+		if err := tx.DecodeBinary(r); err != nil {
+			return err
+		}
+	}
+	return nil
 }
